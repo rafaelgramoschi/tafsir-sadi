@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Tafsir Sa'di - Traduzione Italiana</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        select,
+        input {
+            padding: 5px;
+            margin-right: 10px;
+        }
+
+        #arabic-text {
+            font-size: 20px;
+            line-height: 2;
+            text-align: right;
+            direction: rtl;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            white-space: pre-wrap;
+        }
+
+        .translated {
+            background-color: #fcf966;
+            cursor: pointer;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: #222;
+            color: #ebebeb;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            max-width: 300px;
+        }
+
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #translation-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border: 1px solid #ccc;
+            z-index: 1000;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Tafsir Sa'di - Traduzione Italiana</h1>
+
+        <div class="controls">
+            <label for="surah-input">Surah:</label>
+            <input type="number" id="surah-input" min="1">
+
+            <label for="ayah-input">Ayah:</label>
+            <input type="number" id="ayah-input" min="1">
+        </div>
+
+        <div id="arabic-text"></div>
+
+        <div class="overlay" id="modal-overlay"></div>
+        <div id="translation-modal">
+            <h3>Inserisci traduzione</h3>
+            <div id="selected-text" style="margin-bottom: 10px; font-style: italic; direction: rtl; text-align: right;">
+            </div>
+            <textarea id="translation-input" rows="4" cols="50"
+                placeholder="Inserisci la traduzione italiana..."></textarea>
+            <div style="margin-top: 10px;">
+                <button id="save-translation">Salva</button>
+                <button id="cancel-translation">Annulla</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let baseAPI = "/editor";
+        document.addEventListener('DOMContentLoaded', function () {
+            const surahInput = document.getElementById('surah-input');
+            const ayahInput = document.getElementById('ayah-input');
+            const arabicText = document.getElementById('arabic-text');
+            const translationModal = document.getElementById('translation-modal');
+            const modalOverlay = document.getElementById('modal-overlay');
+            const selectedText = document.getElementById('selected-text');
+            const translationInput = document.getElementById('translation-input');
+            const saveTranslationBtn = document.getElementById('save-translation');
+            const cancelTranslationBtn = document.getElementById('cancel-translation');
+
+            let currentSelection = {};
+            let tooltip = null;
+            const translationsMap = new Map();
+
+            // Carica il testo del tafsir per la surah e ayah selezionate
+            ayahInput.addEventListener('input', function () {
+                const surahNumber = surahInput.value;
+                const ayahNumber = ayahInput.value;
+
+                if (!surahNumber || !ayahNumber) {
+                    return;
+                }
+
+                fetch(baseAPI + `/get_tafsir/${surahNumber}/${ayahNumber}/`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Inizializza tutte le evidenziazioni
+                        initializeHighlights(data.text_ar, data.translations || []);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Errore nel caricamento del testo del Tafsir');
+                    });
+            });
+
+            // Gestione selezione testo
+            arabicText.addEventListener('mouseup', function () {
+                const selection = window.getSelection();
+                if (selection.toString().trim() && selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    const preSelectionRange = range.cloneRange();
+                    preSelectionRange.selectNodeContents(arabicText);
+                    preSelectionRange.setEnd(range.startContainer, range.startOffset);
+                    const start = preSelectionRange.toString().length;
+                    const end = start + selection.toString().length;
+
+                    currentSelection = {
+                        text: selection.toString(),
+                        start: start,
+                        end: end,
+                        surah: surahInput.value,
+                        ayah: ayahInput.value
+                    };
+
+                    // Mostra il modal per la traduzione
+                    selectedText.textContent = `"${selection.toString()}"`;
+                    translationInput.value = '';
+                    translationModal.style.display = 'block';
+                    modalOverlay.style.display = 'block';
+                }
+            });
+
+            // Salva la traduzione
+            saveTranslationBtn.addEventListener('click', function () {
+                if (!translationInput.value.trim()) {
+                    alert('Inserisci una traduzione');
+                    return;
+                }
+
+                const data = {
+                    surah: currentSelection.surah,
+                    ayah: currentSelection.ayah,
+                    arabic_selection: currentSelection.text,
+                    translation_it: translationInput.value,
+                    start_index: currentSelection.start,
+                    end_index: currentSelection.end
+                };
+
+                fetch(baseAPI + '/save_translation/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify(data)
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            // Applica l'highlight al testo tradotto
+                            highlightTranslatedText(
+                                currentSelection.start,
+                                currentSelection.end,
+                                translationInput.value
+                            );
+
+                            // Chiudi il modal
+                            translationModal.style.display = 'none';
+                            modalOverlay.style.display = 'none';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Errore nel salvataggio');
+                    });
+            });
+
+            // Annulla la traduzione
+            cancelTranslationBtn.addEventListener('click', function () {
+                translationModal.style.display = 'none';
+                modalOverlay.style.display = 'none';
+            });
+
+            // Chiudi il modal cliccando sull'overlay
+            modalOverlay.addEventListener('click', function () {
+                translationModal.style.display = 'none';
+                modalOverlay.style.display = 'none';
+            });
+
+            // Funzione per applicare tutte le evidenziazioni
+            function applyAllHighlights(text, translations) {
+                // Ordina le traduzioni per indice di inizio (dalla prima all'ultima)
+                translations.sort((a, b) => a.start - b.start);
+
+                let lastIndex = 0;
+                let highlightedHTML = "";
+
+                for (const trans of translations) {
+                    // Aggiungi il testo prima della traduzione
+                    highlightedHTML += escapeHTML(text.substring(lastIndex, trans.start));
+
+                    // Aggiungi il testo evidenziato
+                    highlightedHTML += `<span class="translated" data-translation="${escapeHTML(trans.text)}">${escapeHTML(text.substring(trans.start, trans.end))}</span>`;
+
+                    lastIndex = trans.end;
+                }
+
+                // Aggiungi il testo rimanente dopo l'ultima traduzione
+                highlightedHTML += escapeHTML(text.substring(lastIndex));
+
+                return highlightedHTML;
+            }
+
+            // Funzione di utilità per escapare HTML
+            function escapeHTML(str) {
+                return str.replace(/[&<>"']/g, function (m) {
+                    return {
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#39;'
+                    }[m];
+                });
+            }
+
+            // Funzione per evidenziare il testo tradotto
+            function highlightTranslatedText(start, end, translation) {
+                // Aggiungi la nuova traduzione alla mappa
+                const key = `${start}-${end}`;
+                translationsMap.set(key, { start, end, text: translation });
+
+                // Applica tutte le evidenziazioni
+                const text = arabicText.textContent;
+                const translations = Array.from(translationsMap.values());
+                arabicText.innerHTML = applyAllHighlights(text, translations);
+
+                // Aggiungi event listeners per i tooltip
+                addTooltipListeners();
+            }
+
+            // Funzione per inizializzare tutte le evidenziazioni
+            function initializeHighlights(text, translations) {
+                // Pulisci la mappa
+                translationsMap.clear();
+
+                // Aggiungi tutte le traduzioni alla mappa
+                translations.forEach(trans => {
+                    const key = `${trans.start}-${trans.end}`;
+                    translationsMap.set(key, trans);
+                });
+
+                // Applica tutte le evidenziazioni
+                arabicText.innerHTML = applyAllHighlights(text, translations);
+
+                // Aggiungi event listeners per i tooltip
+                addTooltipListeners();
+            }
+
+            // Aggiungi event listeners per i tooltip
+            function addTooltipListeners() {
+                document.querySelectorAll('.translated').forEach(el => {
+                    // Rimuovi eventuali listener esistenti
+                    el.replaceWith(el.cloneNode(true));
+                });
+
+                document.querySelectorAll('.translated').forEach(el => {
+                    el.addEventListener('mouseenter', showTooltip);
+                    el.addEventListener('mouseleave', hideTooltip);
+                });
+            }
+
+            // Mostra tooltip con la traduzione
+            function showTooltip(e) {
+                if (tooltip) tooltip.remove();
+
+                const translation = e.target.getAttribute('data-translation');
+                tooltip = document.createElement('div');
+                tooltip.className = 'tooltip';
+                tooltip.textContent = translation;
+
+                document.body.appendChild(tooltip);
+
+                const rect = e.target.getBoundingClientRect();
+                tooltip.style.top = (rect.top - tooltip.offsetHeight - 5) + 'px';
+                tooltip.style.left = rect.left + 'px';
+            }
+
+            // Nascondi tooltip
+            function hideTooltip() {
+                if (tooltip) {
+                    tooltip.remove();
+                    tooltip = null;
+                }
+            }
+
+            // Funzione di utilità per ottenere il cookie CSRF
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+        });
+    </script>
+</body>
+
+</html>

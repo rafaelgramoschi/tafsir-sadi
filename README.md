@@ -7,3 +7,7 @@ Processo:
 - Tafsir Sa'di in arabo tradotto da Deepseek in italiano (anche l'aggiunta dei tashkeel, fatta da Deepseek)
 
 Il lavoro è da far controllare a studenti della conoscenza.
+
+## Input
+traduci nome con nome, verbo con verbo, root word con root word
+e solo se non riesci, traduci con i significati.
