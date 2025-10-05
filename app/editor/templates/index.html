@@ -258,7 +258,7 @@
                 modalOverlay.style.display = 'none';
             });
 
-            // Gestione selezione testo
+            // Gestione selezione testo - SALVA ENTRAMBI GLI INDICI
             arabicText.addEventListener('mouseup', function () {
                 const selection = window.getSelection();
                 if (selection.toString().trim() && selection.rangeCount > 0) {
@@ -266,13 +266,28 @@
                     const preSelectionRange = range.cloneRange();
                     preSelectionRange.selectNodeContents(arabicText);
                     preSelectionRange.setEnd(range.startContainer, range.startOffset);
+                    
                     const start = preSelectionRange.toString().length;
                     const end = start + selection.toString().length;
 
+                    // Calcola gli indici corrispondenti nell'altra versione del testo
+                    let startOther, endOther;
+                    if (tashkeelCheckbox.checked) {
+                        // Se stiamo selezionando nel testo CON tashkeel, calcola gli indici per quello SENZA
+                        startOther = mapIndexToOtherVersion(start, currentTextTashkeel, currentTextAr, true);
+                        endOther = mapIndexToOtherVersion(end, currentTextTashkeel, currentTextAr, true);
+                    } else {
+                        // Se stiamo selezionando nel testo SENZA tashkeel, calcola gli indici per quello CON
+                        startOther = mapIndexToOtherVersion(start, currentTextAr, currentTextTashkeel, false);
+                        endOther = mapIndexToOtherVersion(end, currentTextAr, currentTextTashkeel, false);
+                    }
+
                     currentSelection = {
                         text: selection.toString(),
-                        start: start,
-                        end: end,
+                        start: tashkeelCheckbox.checked ? startOther : start,
+                        end: tashkeelCheckbox.checked ? endOther : end,
+                        start_tashkeel: tashkeelCheckbox.checked ? start : startOther,
+                        end_tashkeel: tashkeelCheckbox.checked ? end : endOther,
                         surah: surahInput.value,
                         ayah: ayahInput.value
                     };
@@ -285,7 +300,48 @@
                 }
             });
 
-            // Salva la traduzione
+            // Funzione per mappare gli indici tra testo con e senza tashkeel
+            function mapIndexToOtherVersion(index, sourceText, targetText, fromTashkeelToNormal) {
+                if (!targetText || sourceText === targetText) return index;
+                
+                let sourceIndex = 0;
+                let targetIndex = 0;
+                
+                while (sourceIndex < index && sourceIndex < sourceText.length && targetIndex < targetText.length) {
+                    const sourceChar = sourceText[sourceIndex];
+                    const targetChar = targetText[targetIndex];
+                    
+                    // Se i caratteri corrispondono (ignorando i tashkeel), avanziamo entrambi
+                    if (fromTashkeelToNormal) {
+                        // Da con tashkeel a senza: saltiamo i tashkeel nella sorgente
+                        if (!isTashkeel(sourceChar)) {
+                            if (sourceChar === targetChar) {
+                                targetIndex++;
+                            }
+                        }
+                        sourceIndex++;
+                    } else {
+                        // Da senza tashkeel a con: saltiamo i tashkeel nel target
+                        if (isTashkeel(targetChar)) {
+                            targetIndex++;
+                        } else {
+                            if (sourceChar === targetChar) {
+                                sourceIndex++;
+                                targetIndex++;
+                            }
+                        }
+                    }
+                }
+                
+                return targetIndex;
+            }
+
+            // Funzione per verificare se un carattere è tashkeel
+            function isTashkeel(char) {
+                return /[\u064B-\u065F\u0670]/.test(char);
+            }
+
+            // Salva la traduzione con entrambi gli indici
             saveTranslationBtn.addEventListener('click', function () {
                 if (!translationInput.value.trim()) {
                     alert('Inserisci una traduzione');
@@ -298,7 +354,9 @@
                     arabic_selection: currentSelection.text,
                     translation_it: translationInput.value,
                     start_index: currentSelection.start,
-                    end_index: currentSelection.end
+                    end_index: currentSelection.end,
+                    start_index_tashkeel: currentSelection.start_tashkeel,
+                    end_index_tashkeel: currentSelection.end_tashkeel
                 };
 
                 fetch(baseAPI + '/save_translation/', {
@@ -316,6 +374,8 @@
                             highlightTranslatedText(
                                 currentSelection.start,
                                 currentSelection.end,
+                                currentSelection.start_tashkeel,
+                                currentSelection.end_tashkeel,
                                 translationInput.value
                             );
 
@@ -352,13 +412,17 @@
                 let highlightedHTML = "";
 
                 for (const trans of translations) {
+                    // Usa gli indici corretti in base al tipo di testo visualizzato
+                    const start = tashkeelCheckbox.checked ? (trans.start_tashkeel || trans.start) : trans.start;
+                    const end = tashkeelCheckbox.checked ? (trans.end_tashkeel || trans.end) : trans.end;
+
                     // Aggiungi il testo prima della traduzione
-                    highlightedHTML += escapeHTML(text.substring(lastIndex, trans.start));
+                    highlightedHTML += escapeHTML(text.substring(lastIndex, start));
 
                     // Aggiungi il testo evidenziato
-                    highlightedHTML += `<span class="translated" data-translation="${escapeHTML(trans.text)}">${escapeHTML(text.substring(trans.start, trans.end))}</span>`;
+                    highlightedHTML += `<span class="translated" data-translation="${escapeHTML(trans.text)}">${escapeHTML(text.substring(start, end))}</span>`;
 
-                    lastIndex = trans.end;
+                    lastIndex = end;
                 }
 
                 // Aggiungi il testo rimanente dopo l'ultima traduzione
@@ -381,10 +445,16 @@
             }
 
             // Funzione per evidenziare il testo tradotto
-            function highlightTranslatedText(start, end, translation) {
+            function highlightTranslatedText(start, end, startTashkeel, endTashkeel, translation) {
                 // Aggiungi la nuova traduzione alla mappa
                 const key = `${start}-${end}`;
-                translationsMap.set(key, { start, end, text: translation });
+                translationsMap.set(key, { 
+                    start, 
+                    end, 
+                    start_tashkeel: startTashkeel, 
+                    end_tashkeel: endTashkeel,
+                    text: translation 
+                });
 
                 // Applica tutte le evidenziazioni
                 const text = getCurrentText();

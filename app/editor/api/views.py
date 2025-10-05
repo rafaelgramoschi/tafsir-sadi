@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json
+import re
 
 from editor.models import Surah, Ayah, TafsirText, TafsirTranslation
 from pytafseer import QuranTafseer
@@ -40,6 +41,8 @@ def get_tafsir(request, surah_number, ayah_number):
         translations.append({
             'start': trans.start_index,
             'end': trans.end_index,
+            'start_tashkeel': trans.start_index_tashkeel,
+            'end_tashkeel': trans.end_index_tashkeel,
             'text': trans.translation_it
         })
     
@@ -60,6 +63,8 @@ def save_translation(request):
     translation_it = data.get('translation_it')
     start_index = data.get('start_index')
     end_index = data.get('end_index')
+    start_index_tashkeel = data.get('start_index_tashkeel')
+    end_index_tashkeel = data.get('end_index_tashkeel')
     
     surah = get_object_or_404(Surah, number=surah_number)
     ayah = get_object_or_404(Ayah, surah=surah, number=ayah_number)
@@ -72,7 +77,9 @@ def save_translation(request):
         end_index=end_index,
         defaults={
             'arabic_selection': arabic_selection,
-            'translation_it': translation_it
+            'translation_it': translation_it,
+            'start_index_tashkeel': start_index_tashkeel,
+            'end_index_tashkeel': end_index_tashkeel
         }
     )
     

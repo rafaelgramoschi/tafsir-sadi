@@ -37,8 +37,10 @@ class TafsirTranslation(models.Model):
     tafsir_text = models.ForeignKey(TafsirText, on_delete=models.CASCADE, related_name='translations')
     arabic_selection = models.TextField()  # parte del testo arabo selezionato
     translation_it = models.TextField()    # traduzione italiana
-    start_index = models.PositiveIntegerField()  # indice di inizio nel testo del tafsir
-    end_index = models.PositiveIntegerField()    # indice di fine nel testo del tafsir
+    start_index = models.PositiveIntegerField()  # indice di inizio nel testo SENZA tashkeel
+    end_index = models.PositiveIntegerField()    # indice di fine nel testo SENZA tashkeel
+    start_index_tashkeel = models.PositiveIntegerField(default=0)  # indice di inizio nel testo CON tashkeel
+    end_index_tashkeel = models.PositiveIntegerField(default=0)    # indice di fine nel testo CON tashkeel
     
     class Meta:
         unique_together = ('tafsir_text', 'start_index', 'end_index')
