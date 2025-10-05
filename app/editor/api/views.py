@@ -28,7 +28,10 @@ def get_tafsir(request, surah_number, ayah_number):
     # Ottieni o crea il testo del tafsir per questa ayah
     tafsir_text, created = TafsirText.objects.get_or_create(
         ayah=ayah,
-        defaults={'text_ar': f"{tafseer_text}"}  # Sostituisci con il testo reale
+        defaults={
+            'text_ar': f"{tafseer_text}",
+            'text_tashkeel': ''  # Inizialmente vuoto
+        }
     )
     
     # Prepara le traduzioni esistenti
@@ -42,6 +45,7 @@ def get_tafsir(request, surah_number, ayah_number):
     
     return JsonResponse({
         'text_ar': tafsir_text.text_ar,
+        'text_tashkeel': tafsir_text.text_tashkeel or '',
         'translations': translations
     })
 
@@ -71,5 +75,24 @@ def save_translation(request):
             'translation_it': translation_it
         }
     )
+    
+    return JsonResponse({'status': 'success'})
+
+@csrf_exempt
+@require_POST
+def save_tashkeel(request):
+    data = json.loads(request.body)
+    
+    surah_number = data.get('surah')
+    ayah_number = data.get('ayah')
+    text_tashkeel = data.get('text_tashkeel')
+    
+    surah = get_object_or_404(Surah, number=surah_number)
+    ayah = get_object_or_404(Ayah, surah=surah, number=ayah_number)
+    tafsir_text = get_object_or_404(TafsirText, ayah=ayah)
+    
+    # Aggiorna il testo con tashkeel
+    tafsir_text.text_tashkeel = text_tashkeel
+    tafsir_text.save()
     
     return JsonResponse({'status': 'success'})

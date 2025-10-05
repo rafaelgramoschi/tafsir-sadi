@@ -102,6 +102,11 @@
 
             <label for="ayah-input">Ayah:</label>
             <input type="number" id="ayah-input" min="1">
+
+            <input type="checkbox" id="tashkeel-checkbox">
+            <label for="tashkeel-checkbox">Tashkeel</label>
+
+            <button id="add-tashkeel-btn">Aggiungi Tashkeel</button>
         </div>
 
         <div id="arabic-text"></div>
@@ -118,6 +123,16 @@
                 <button id="cancel-translation">Annulla</button>
             </div>
         </div>
+
+        <!-- Modal Tashkeel -->
+        <div id="tashkeel-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 1px solid #ccc; z-index: 1000; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
+            <h3>Inserisci testo con Tashkeel</h3>
+            <textarea id="tashkeel-textarea" rows="10" cols="60" placeholder="Incolla qui il testo arabo con tashkeel..." style="width: 100%; font-family: Arial, sans-serif; font-size: 16px; direction: rtl; text-align: right; padding: 10px; border: 1px solid #ccc; border-radius: 4px;"></textarea>
+            <div style="margin-top: 10px;">
+                <button id="save-tashkeel">Salva</button>
+                <button id="cancel-tashkeel">Annulla</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -127,15 +142,23 @@
             const ayahInput = document.getElementById('ayah-input');
             const arabicText = document.getElementById('arabic-text');
             const translationModal = document.getElementById('translation-modal');
+            const tashkeelModal = document.getElementById('tashkeel-modal');
             const modalOverlay = document.getElementById('modal-overlay');
             const selectedText = document.getElementById('selected-text');
             const translationInput = document.getElementById('translation-input');
             const saveTranslationBtn = document.getElementById('save-translation');
             const cancelTranslationBtn = document.getElementById('cancel-translation');
+            const addTashkeelBtn = document.getElementById('add-tashkeel-btn');
+            const tashkeelCheckbox = document.getElementById('tashkeel-checkbox');
+            const tashkeelTextarea = document.getElementById('tashkeel-textarea');
+            const saveTashkeelBtn = document.getElementById('save-tashkeel');
+            const cancelTashkeelBtn = document.getElementById('cancel-tashkeel');
 
             let currentSelection = {};
             let tooltip = null;
             const translationsMap = new Map();
+            let currentTextAr = '';
+            let currentTextTashkeel = '';
 
             // Carica il testo del tafsir per la surah e ayah selezionate
             ayahInput.addEventListener('input', function () {
@@ -149,13 +172,90 @@
                 fetch(baseAPI + `/get_tafsir/${surahNumber}/${ayahNumber}/`)
                     .then(response => response.json())
                     .then(data => {
+                        currentTextAr = data.text_ar;
+                        currentTextTashkeel = data.text_tashkeel;
+                        
+                        // Mostra il testo in base alla checkbox
+                        updateDisplayedText();
+                        
                         // Inizializza tutte le evidenziazioni
-                        initializeHighlights(data.text_ar, data.translations || []);
+                        initializeHighlights(getCurrentText(), data.translations || []);
                     })
                     .catch(error => {
                         console.error('Error:', error);
                         alert('Errore nel caricamento del testo del Tafsir');
                     });
+            });
+
+            // Gestione checkbox tashkeel
+            tashkeelCheckbox.addEventListener('change', function() {
+                updateDisplayedText();
+                // Re-inizializza le evidenziazioni con il nuovo testo
+                initializeHighlights(getCurrentText(), Array.from(translationsMap.values()));
+            });
+
+            // Funzione per ottenere il testo corrente in base alla checkbox
+            function getCurrentText() {
+                return tashkeelCheckbox.checked && currentTextTashkeel ? currentTextTashkeel : currentTextAr;
+            }
+
+            // Funzione per aggiornare il testo visualizzato
+            function updateDisplayedText() {
+                const textToShow = getCurrentText();
+                if (textToShow) {
+                    arabicText.textContent = textToShow;
+                }
+            }
+
+            // Apri modal tashkeel
+            addTashkeelBtn.addEventListener('click', function() {
+                tashkeelTextarea.value = currentTextTashkeel || currentTextAr;
+                tashkeelModal.style.display = 'block';
+                modalOverlay.style.display = 'block';
+            });
+
+            // Salva tashkeel
+            saveTashkeelBtn.addEventListener('click', function() {
+                const tashkeelText = tashkeelTextarea.value.trim();
+                if (!tashkeelText) {
+                    alert('Inserisci il testo con tashkeel');
+                    return;
+                }
+
+                const data = {
+                    surah: surahInput.value,
+                    ayah: ayahInput.value,
+                    text_tashkeel: tashkeelText
+                };
+
+                fetch(baseAPI + '/save_tashkeel/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        currentTextTashkeel = tashkeelText;
+                        updateDisplayedText();
+                        tashkeelModal.style.display = 'none';
+                        modalOverlay.style.display = 'none';
+                        alert('Tashkeel salvato con successo!');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Errore nel salvataggio del tashkeel');
+                });
+            });
+
+            // Annulla tashkeel
+            cancelTashkeelBtn.addEventListener('click', function() {
+                tashkeelModal.style.display = 'none';
+                modalOverlay.style.display = 'none';
             });
 
             // Gestione selezione testo
@@ -236,9 +336,10 @@
                 modalOverlay.style.display = 'none';
             });
 
-            // Chiudi il modal cliccando sull'overlay
+            // Chiudi i modal cliccando sull'overlay
             modalOverlay.addEventListener('click', function () {
                 translationModal.style.display = 'none';
+                tashkeelModal.style.display = 'none';
                 modalOverlay.style.display = 'none';
             });
 
@@ -286,7 +387,7 @@
                 translationsMap.set(key, { start, end, text: translation });
 
                 // Applica tutte le evidenziazioni
-                const text = arabicText.textContent;
+                const text = getCurrentText();
                 const translations = Array.from(translationsMap.values());
                 arabicText.innerHTML = applyAllHighlights(text, translations);
 

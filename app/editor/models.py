@@ -24,7 +24,8 @@ class Ayah(models.Model):
 
 class TafsirText(models.Model):
     ayah = models.ForeignKey(Ayah, on_delete=models.CASCADE, related_name='tafsir_texts')
-    text_ar = models.TextField()  # testo del tafsir in arabo
+    text_ar = models.TextField()  # testo del tafsir in arabo senza tashkeel
+    text_tashkeel = models.TextField(blank=True, null=True)  # testo del tafsir in arabo con tashkeel
     
     class Meta:
         verbose_name_plural = "Tafsir Texts"
