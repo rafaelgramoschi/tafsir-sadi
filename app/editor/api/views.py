@@ -61,16 +61,16 @@ def save_translation(request):
     ayah_number = data.get('ayah')
     arabic_selection = data.get('arabic_selection')
     translation_it = data.get('translation_it')
-    start_index = data.get('start_index')
+    start_index = data.get('start_index')  # Indici per testo SENZA tashkeel
     end_index = data.get('end_index')
-    start_index_tashkeel = data.get('start_index_tashkeel')
-    end_index_tashkeel = data.get('end_index_tashkeel')
+    # start_index_tashkeel = data.get('start_index_tashkeel')  # Indici per testo CON tashkeel
+    # end_index_tashkeel = data.get('end_index_tashkeel')
     
     surah = get_object_or_404(Surah, number=surah_number)
     ayah = get_object_or_404(Ayah, surah=surah, number=ayah_number)
     tafsir_text = get_object_or_404(TafsirText, ayah=ayah)
     
-    # Crea o aggiorna la traduzione
+    # Salva entrambe le versioni degli indici
     translation, created = TafsirTranslation.objects.update_or_create(
         tafsir_text=tafsir_text,
         start_index=start_index,
@@ -78,8 +78,8 @@ def save_translation(request):
         defaults={
             'arabic_selection': arabic_selection,
             'translation_it': translation_it,
-            'start_index_tashkeel': start_index_tashkeel,
-            'end_index_tashkeel': end_index_tashkeel
+            # 'start_index_tashkeel': start_index_tashkeel,
+            # 'end_index_tashkeel': end_index_tashkeel
         }
     )
     

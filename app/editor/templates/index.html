@@ -160,6 +160,37 @@
             let currentTextAr = '';
             let currentTextTashkeel = '';
 
+            // Funzione per verificare se un carattere è tashkeel
+            function isTashkeel(char) {
+                const code = char.charCodeAt(0);
+                return (code >= 0x064B && code <= 0x065F) || code === 0x0670;
+            }
+
+            // Funzione per contare solo le lettere (ignorando tashkeel) fino a una certa posizione
+            function countLettersToPosition(text, position) {
+                let letterCount = 0;
+                for (let i = 0; i < position && i < text.length; i++) {
+                    if (!isTashkeel(text[i])) {
+                        letterCount++;
+                    }
+                }
+                return letterCount;
+            }
+
+            // Funzione per trovare la posizione corrispondente basata sul conteggio lettere
+            function findPositionByLetterCount(text, targetLetterCount) {
+                let letterCount = 0;
+                for (let i = 0; i < text.length; i++) {
+                    if (!isTashkeel(text[i])) {
+                        if (letterCount === targetLetterCount) {
+                            return i;
+                        }
+                        letterCount++;
+                    }
+                }
+                return text.length;
+            }
+
             // Carica il testo del tafsir per la surah e ayah selezionate
             ayahInput.addEventListener('input', function () {
                 const surahNumber = surahInput.value;
@@ -216,7 +247,7 @@
 
             // Salva tashkeel
             saveTashkeelBtn.addEventListener('click', function() {
-                const tashkeelText = tashkeelTextarea.value.trim();
+                const tashkeelText = tashkeelTextarea.value;
                 if (!tashkeelText) {
                     alert('Inserisci il testo con tashkeel');
                     return;
@@ -258,7 +289,7 @@
                 modalOverlay.style.display = 'none';
             });
 
-            // SOLUZIONE SEMPLIFICATA: Gestione selezione testo
+            // Gestione selezione testo SEMPLICE
             arabicText.addEventListener('mouseup', function () {
                 const selection = window.getSelection();
                 if (selection.toString().trim() && selection.rangeCount > 0) {
@@ -270,15 +301,10 @@
                     const start = preSelectionRange.toString().length;
                     const end = start + selection.toString().length;
 
-                    // SOLUZIONE MOLTO SEMPLICE: per ora usiamo gli stessi indici per entrambe le versioni
-                    // Questo risolve il problema del blocco della pagina
-                    // Possiamo migliorare il mapping in un secondo momento
                     currentSelection = {
                         text: selection.toString(),
                         start: start,
                         end: end,
-                        start_tashkeel: start,
-                        end_tashkeel: end,
                         surah: surahInput.value,
                         ayah: ayahInput.value
                     };
@@ -304,9 +330,7 @@
                     arabic_selection: currentSelection.text,
                     translation_it: translationInput.value,
                     start_index: currentSelection.start,
-                    end_index: currentSelection.end,
-                    start_index_tashkeel: currentSelection.start_tashkeel,
-                    end_index_tashkeel: currentSelection.end_tashkeel
+                    end_index: currentSelection.end
                 };
 
                 fetch(baseAPI + '/save_translation/', {
@@ -324,8 +348,6 @@
                             highlightTranslatedText(
                                 currentSelection.start,
                                 currentSelection.end,
-                                currentSelection.start_tashkeel,
-                                currentSelection.end_tashkeel,
                                 translationInput.value
                             );
 
@@ -362,9 +384,21 @@
                 let highlightedHTML = "";
 
                 for (const trans of translations) {
-                    // Usa gli indici corretti in base al tipo di testo visualizzato
-                    const start = tashkeelCheckbox.checked ? (trans.start_tashkeel || trans.start) : trans.start;
-                    const end = tashkeelCheckbox.checked ? (trans.end_tashkeel || trans.end) : trans.end;
+                    let start, end;
+
+                    // SEMPRE: convertiamo gli indici basandoci sul conteggio delle LETTERE
+                    if (tashkeelCheckbox.checked && currentTextTashkeel) {
+                        // Usiamo il testo con tashkeel
+                        const letterCountStart = countLettersToPosition(currentTextAr, trans.start);
+                        const letterCountEnd = countLettersToPosition(currentTextAr, trans.end);
+                        
+                        start = findPositionByLetterCount(currentTextTashkeel, letterCountStart);
+                        end = findPositionByLetterCount(currentTextTashkeel, letterCountEnd);
+                    } else {
+                        // Usiamo il testo senza tashkeel (o con tashkeel parziale)
+                        start = trans.start;
+                        end = trans.end;
+                    }
 
                     // Assicuriamoci che gli indici siano validi
                     if (start >= text.length || end > text.length || start > end) {
@@ -401,14 +435,12 @@
             }
 
             // Funzione per evidenziare il testo tradotto
-            function highlightTranslatedText(start, end, startTashkeel, endTashkeel, translation) {
+            function highlightTranslatedText(start, end, translation) {
                 // Aggiungi la nuova traduzione alla mappa
                 const key = `${start}-${end}`;
                 translationsMap.set(key, { 
                     start, 
                     end, 
-                    start_tashkeel: startTashkeel, 
-                    end_tashkeel: endTashkeel,
                     text: translation 
                 });
 
